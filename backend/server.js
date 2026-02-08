@@ -1,8 +1,15 @@
-// server.js - Production-ready Node.js backend for Starlink WiFi
+// server.js - Production-ready Node.js backend for Starlink WiFi with Supabase
 require('dotenv').config();
 const express = require('express');
 const nodemailer = require('nodemailer');
 const cors = require('cors');
+const { createClient } = require('@supabase/supabase-js');
+
+// Supabase client
+const supabase = createClient(
+    process.env.SUPABASE_URL || 'https://jgaeldguwezbgglwaivz.supabase.co',
+    process.env.SUPABASE_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImpnYWVsZGd1d2V6YmdnbHdhaXZ6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzA1Nzg1NTAsImV4cCI6MjA4NjE1NDU1MH0.pAkRxRs1gvmrJJR_CNietYes6ju6qOMP8Etnpr3TtyQ'
+);
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -11,6 +18,19 @@ const PORT = process.env.PORT || 3000;
 app.use(cors());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
+
+// Test Supabase connection
+async function testSupabaseConnection() {
+    try {
+        const { data, error } = await supabase.from('messages').select('count', { count: 'exact', head: true });
+        if (error) throw error;
+        console.log('✅ Connected to Supabase');
+    } catch (error) {
+        console.error('❌ Supabase connection error:', error.message);
+    }
+}
+
+testSupabaseConnection();
 
 // Email transporter configuration
 const transporter = nodemailer.createTransport({
@@ -181,16 +201,36 @@ function generateEmailTemplate(content, templateType = 'default') {
 // API Routes
 
 // Health check endpoint
-app.get('/api/health', (req, res) => {
-    res.json({ 
-        success: true, 
-        message: 'Starlink WiFi Backend is running',
-        timestamp: new Date().toISOString()
-    });
+app.get('/api/health', async (req, res) => {
+    try {
+        // Test database connection
+        const { data: messages, error: msgError } = await supabase
+            .from('messages')
+            .select('count', { count: 'exact', head: true });
+            
+        const { data: gallery, error: galError } = await supabase
+            .from('gallery')
+            .select('count', { count: 'exact', head: true });
+            
+        const dbStatus = (!msgError && !galError) ? 'connected' : 'disconnected';
+        
+        res.json({ 
+            success: true, 
+            message: 'Starlink WiFi Backend is running',
+            database: dbStatus,
+            timestamp: new Date().toISOString()
+        });
+    } catch (error) {
+        res.status(500).json({
+            success: false,
+            message: 'Health check failed',
+            error: error.message
+        });
+    }
 });
 
-// Image upload notification endpoint
-app.post('/api/notify-image-upload', async (req, res) => {
+// Image upload endpoint - saves to Supabase AND sends notification
+app.post('/api/upload-image', async (req, res) => {
     try {
         const { imageData } = req.body;
         
@@ -201,6 +241,26 @@ app.post('/api/notify-image-upload', async (req, res) => {
             });
         }
 
+        // Save to Supabase
+        const { data, error } = await supabase
+            .from('gallery')
+            .insert([{
+                title: imageData.title || '',
+                description: imageData.description || '',
+                url: imageData.url,
+                filename: imageData.filename,
+                category: imageData.category || 'general',
+                size: imageData.size,
+                type: imageData.type,
+                visible: true,
+                uploaded_by: 'admin'
+            }])
+            .select()
+            .single();
+
+        if (error) throw error;
+        
+        // Send email notification
         const emailContent = `
             <h2>New Image Added to Gallery</h2>
             <div class="highlight">
@@ -210,7 +270,7 @@ app.post('/api/notify-image-upload', async (req, res) => {
                 <p><strong>File:</strong> ${imageData.filename || 'Unknown'}</p>
                 <p><strong>Size:</strong> ${(imageData.size ? (imageData.size / 1024 / 1024).toFixed(2) : '0')} MB</p>
             </div>
-            <p><small>Uploaded at: ${new Date(imageData.timestamp || Date.now()).toLocaleString()}</small></p>
+            <p><small>Uploaded at: ${new Date().toLocaleString()}</small></p>
         `;
 
         const mailOptions = {
@@ -222,49 +282,135 @@ app.post('/api/notify-image-upload', async (req, res) => {
 
         const info = await transporter.sendMail(mailOptions);
         
-        console.log('Image upload notification sent:', info.messageId);
+        console.log('Image saved to Supabase and notification sent:', info.messageId);
         
         res.json({ 
             success: true, 
-            message: 'Image upload notification sent successfully',
+            message: 'Image uploaded successfully',
+            data: data,
             messageId: info.messageId
         });
         
     } catch (error) {
-        console.error('Error sending image upload notification:', error);
+        console.error('Error uploading image:', error);
         res.status(500).json({ 
             success: false, 
-            message: 'Failed to send notification',
+            message: 'Failed to upload image',
             error: error.message 
         });
     }
 });
 
-// New message notification endpoint
-app.post('/api/notify-new-message', async (req, res) => {
+// Get all gallery images
+app.get('/api/gallery', async (req, res) => {
     try {
-        const { messageData } = req.body;
+        const { category, limit } = req.query;
+        let query = supabase
+            .from('gallery')
+            .select('*')
+            .eq('visible', true)
+            .order('created_at', { ascending: false });
         
-        if (!messageData) {
-            return res.status(400).json({ 
-                success: false, 
-                message: 'Message data is required' 
+        if (category && category !== 'all') {
+            query = query.eq('category', category);
+        }
+        
+        if (limit) {
+            query = query.limit(parseInt(limit));
+        }
+        
+        const { data, error } = await query;
+        
+        if (error) throw error;
+            
+        res.json({
+            success: true,
+            data: data,
+            count: data.length
+        });
+        
+    } catch (error) {
+        console.error('Error fetching gallery:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Failed to fetch gallery',
+            error: error.message
+        });
+    }
+});
+
+// Delete gallery image
+app.delete('/api/gallery/:id', async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { error } = await supabase
+            .from('gallery')
+            .delete()
+            .eq('id', id);
+        
+        if (error) throw error;
+        
+        res.json({
+            success: true,
+            message: 'Image deleted successfully'
+        });
+        
+    } catch (error) {
+        console.error('Error deleting image:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Failed to delete image',
+            error: error.message
+        });
+    }
+});
+
+// Contact form submission endpoint - saves to Supabase AND sends notification
+app.post('/api/contact', async (req, res) => {
+    try {
+        const { name, email, phone, service, message } = req.body;
+        
+        // Validate required fields
+        if (!name || !email || !message) {
+            return res.status(400).json({
+                success: false,
+                message: 'Name, email, and message are required'
             });
         }
+        
+        // Save to Supabase
+        const { data, error } = await supabase
+            .from('messages')
+            .insert([{
+                name,
+                email,
+                phone: phone || '',
+                service: service || '',
+                message,
+                read: false,
+                status: 'received',
+                ip_address: req.ip,
+                user_agent: req.get('User-Agent')
+            }])
+            .select()
+            .single();
 
+        if (error) throw error;
+        
+        // Send email notification to admin
         const emailContent = `
             <h2>New Message from Website Contact Form</h2>
             <div class="highlight">
-                <p><strong>Name:</strong> ${messageData.name}</p>
-                <p><strong>Email:</strong> ${messageData.email}</p>
-                <p><strong>Phone:</strong> ${messageData.phone || 'Not provided'}</p>
-                <p><strong>Service:</strong> ${messageData.service || 'Not specified'}</p>
+                <p><strong>Name:</strong> ${name}</p>
+                <p><strong>Email:</strong> ${email}</p>
+                <p><strong>Phone:</strong> ${phone || 'Not provided'}</p>
+                <p><strong>Service:</strong> ${service || 'Not specified'}</p>
             </div>
             <h3>Message:</h3>
             <blockquote style="border-left: 4px solid #ddd; padding-left: 15px; margin: 15px 0;">
-                ${messageData.message}
+                ${message}
             </blockquote>
-            <p><small>Received at: ${new Date(messageData.timestamp || Date.now()).toLocaleString()}</small></p>
+            <p><small>Received at: ${new Date().toLocaleString()}</small></p>
         `;
 
         const mailOptions = {
@@ -276,50 +422,219 @@ app.post('/api/notify-new-message', async (req, res) => {
 
         const info = await transporter.sendMail(mailOptions);
         
-        console.log('New message notification sent:', info.messageId);
+        console.log('Message saved to Supabase and notification sent:', info.messageId);
         
         res.json({ 
             success: true, 
-            message: 'New message notification sent successfully',
+            message: 'Message sent successfully! We\'ll contact you soon.',
+            data: data,
             messageId: info.messageId
         });
         
     } catch (error) {
-        console.error('Error sending new message notification:', error);
+        console.error('Error processing contact form:', error);
         res.status(500).json({ 
             success: false, 
-            message: 'Failed to send notification',
+            message: 'Failed to send message',
             error: error.message 
         });
     }
 });
 
-// Bundle update notification endpoint
-app.post('/api/notify-bundle-update', async (req, res) => {
+// Get all messages (admin only)
+app.get('/api/messages', async (req, res) => {
     try {
-        const { bundleData, bundleId } = req.body;
+        const { read, status, limit } = req.query;
+        let query = supabase
+            .from('messages')
+            .select('*')
+            .order('created_at', { ascending: false });
         
-        if (!bundleData || !bundleId) {
-            return res.status(400).json({ 
-                success: false, 
-                message: 'Bundle data and ID are required' 
+        if (read !== undefined) {
+            query = query.eq('read', read === 'true');
+        }
+        
+        if (status) {
+            query = query.eq('status', status);
+        }
+        
+        if (limit) {
+            query = query.limit(parseInt(limit));
+        }
+        
+        const { data, error } = await query;
+        
+        if (error) throw error;
+        
+        // Get unread count
+        const { count: unreadCount, error: countError } = await supabase
+            .from('messages')
+            .select('count', { count: 'exact', head: true })
+            .eq('read', false);
+            
+        res.json({
+            success: true,
+            data: data,
+            count: data.length,
+            unreadCount: countError ? 0 : unreadCount
+        });
+        
+    } catch (error) {
+        console.error('Error fetching messages:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Failed to fetch messages',
+            error: error.message
+        });
+    }
+});
+
+// Update message status
+app.patch('/api/messages/:id', async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { read, status } = req.body;
+        
+        const updateData = {};
+        if (read !== undefined) {
+            updateData.read = read;
+            updateData.read_at = read ? new Date().toISOString() : null;
+        }
+        if (status) {
+            updateData.status = status;
+            if (status === 'responded') {
+                updateData.responded_at = new Date().toISOString();
+            }
+        }
+        
+        const { data, error } = await supabase
+            .from('messages')
+            .update(updateData)
+            .eq('id', id)
+            .select()
+            .single();
+        
+        if (error) throw error;
+        
+        if (!data) {
+            return res.status(404).json({
+                success: false,
+                message: 'Message not found'
             });
         }
+        
+        res.json({
+            success: true,
+            message: 'Message updated successfully',
+            data: data
+        });
+        
+    } catch (error) {
+        console.error('Error updating message:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Failed to update message',
+            error: error.message
+        });
+    }
+});
 
-        const featuresList = bundleData.features 
-            ? bundleData.features.map(feature => `<li>${feature}</li>`).join('')
+// Delete message
+app.delete('/api/messages/:id', async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { error } = await supabase
+            .from('messages')
+            .delete()
+            .eq('id', id);
+        
+        if (error) throw error;
+        
+        res.json({
+            success: true,
+            message: 'Message deleted successfully'
+        });
+        
+    } catch (error) {
+        console.error('Error deleting message:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Failed to delete message',
+            error: error.message
+        });
+    }
+});
+
+// Get all bundles
+app.get('/api/bundles', async (req, res) => {
+    try {
+        const { data, error } = await supabase
+            .from('bundles')
+            .select('*')
+            .eq('visible', true)
+            .order('price', { ascending: true });
+            
+        if (error) throw error;
+            
+        res.json({
+            success: true,
+            data: data,
+            count: data.length
+        });
+        
+    } catch (error) {
+        console.error('Error fetching bundles:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Failed to fetch bundles',
+            error: error.message
+        });
+    }
+});
+
+// Update bundle
+app.put('/api/bundles/:bundleId', async (req, res) => {
+    try {
+        const { bundleId } = req.params;
+        const bundleData = req.body;
+        
+        // Validate bundle ID
+        if (!['daily', 'weekly', 'monthly', 'business'].includes(bundleId)) {
+            return res.status(400).json({
+                success: false,
+                message: 'Invalid bundle ID'
+            });
+        }
+        
+        // Update bundle
+        const { data, error } = await supabase
+            .from('bundles')
+            .update({ 
+                ...bundleData,
+                last_updated: new Date().toISOString(),
+                updated_by: 'admin'
+            })
+            .eq('bundle_id', bundleId)
+            .select()
+            .single();
+
+        if (error) throw error;
+        
+        // Send email notification
+        const featuresList = data.features 
+            ? data.features.map(feature => `<li>${feature}</li>`).join('')
             : '';
 
         const emailContent = `
             <h2>Bundle Information Updated</h2>
             <div class="highlight">
                 <p><strong>Bundle ID:</strong> ${bundleId}</p>
-                <p><strong>Name:</strong> ${bundleData.name}</p>
-                <p><strong>Price:</strong> KSh ${bundleData.price}</p>
+                <p><strong>Name:</strong> ${data.name}</p>
+                <p><strong>Price:</strong> KSh ${data.price}</p>
             </div>
             <h3>Features:</h3>
             <ul>${featuresList}</ul>
-            <p><small>Updated at: ${new Date(bundleData.updated || Date.now()).toLocaleString()}</small></p>
+            <p><small>Updated at: ${new Date().toLocaleString()}</small></p>
         `;
 
         const mailOptions = {
@@ -331,20 +646,56 @@ app.post('/api/notify-bundle-update', async (req, res) => {
 
         const info = await transporter.sendMail(mailOptions);
         
-        console.log('Bundle update notification sent:', info.messageId);
+        console.log('Bundle updated and notification sent:', info.messageId);
         
         res.json({ 
             success: true, 
-            message: 'Bundle update notification sent successfully',
+            message: 'Bundle updated successfully',
+            data: data,
             messageId: info.messageId
         });
         
     } catch (error) {
-        console.error('Error sending bundle update notification:', error);
+        console.error('Error updating bundle:', error);
         res.status(500).json({ 
             success: false, 
-            message: 'Failed to send notification',
+            message: 'Failed to update bundle',
             error: error.message 
+        });
+    }
+});
+
+// Get bundle by ID
+app.get('/api/bundles/:bundleId', async (req, res) => {
+    try {
+        const { bundleId } = req.params;
+        const { data, error } = await supabase
+            .from('bundles')
+            .select('*')
+            .eq('bundle_id', bundleId)
+            .eq('visible', true)
+            .single();
+        
+        if (error) throw error;
+        
+        if (!data) {
+            return res.status(404).json({
+                success: false,
+                message: 'Bundle not found'
+            });
+        }
+        
+        res.json({
+            success: true,
+            data: data
+        });
+        
+    } catch (error) {
+        console.error('Error fetching bundle:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Failed to fetch bundle',
+            error: error.message
         });
     }
 });
