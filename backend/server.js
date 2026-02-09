@@ -749,6 +749,16 @@ app.use((err, req, res, next) => {
     });
 });
 
+// Root health endpoint (for uptime monitors)
+app.get('/', (req, res) => {
+    res.status(200).json({
+        success: true,
+        message: 'Starlink WiFi Backend is online',
+        uptime: process.uptime(),
+        timestamp: new Date().toISOString()
+    });
+});
+
 // 404 handler
 app.use('*', (req, res) => {
     res.status(404).json({
