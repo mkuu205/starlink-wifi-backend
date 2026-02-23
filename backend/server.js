@@ -1,777 +1,219 @@
-// server.js - Production-ready Node.js backend for Starlink WiFi with Supabase
-require('dotenv').config();
-const express = require('express');
-const nodemailer = require('nodemailer');
-const cors = require('cors');
-const { createClient } = require('@supabase/supabase-js');
+// js/nodemailer.js - Production Email Notification System
+// Connected to live backend: https://starlink-wifi-backend-v862.onrender.com
+// No fallback - uses real backend only
 
-// Supabase client
-const supabase = createClient(
-    process.env.SUPABASE_URL || 'https://jgaeldguwezbgglwaivz.supabase.co',
-    process.env.SUPABASE_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImpnYWVsZGd1d2V6YmdnbHdhaXZ6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzA1Nzg1NTAsImV4cCI6MjA4NjE1NDU1MH0.pAkRxRs1gvmrJJR_CNietYes6ju6qOMP8Etnpr3TtyQ'
-);
+import { config } from './config.js';
 
-const app = express();
-const PORT = process.env.PORT || 3000;
-
-// Middleware
-app.use(cors());
-app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
-
-// Test Supabase connection
-async function testSupabaseConnection() {
-    try {
-        const { data, error } = await supabase.from('messages').select('count', { count: 'exact', head: true });
-        if (error) throw error;
-        console.log('✅ Connected to Supabase');
-    } catch (error) {
-        console.error('❌ Supabase connection error:', error.message);
-    }
-}
-
-testSupabaseConnection();
-
-// Email transporter configuration
-const transporter = nodemailer.createTransport({
-    host: process.env.EMAIL_HOST || 'smtp.gmail.com',
-    port: Number(process.env.EMAIL_PORT) || 587,
-    secure: process.env.EMAIL_SECURE === 'true',
-    auth: {
-        user: process.env.EMAIL_USER,
-        pass: process.env.EMAIL_PASS
-    }
-});
-
-// Verify transporter configuration
-transporter.verify((error, success) => {
-    if (error) {
-        console.error('Email transporter configuration error:', error);
-    } else {
-        console.log('Email transporter is ready to send messages');
-    }
-});
-
-// Utility function to generate email templates
-function generateEmailTemplate(content, templateType = 'default') {
-    const templates = {
-        default: `
-            <!DOCTYPE html>
-            <html>
-            <head>
-                <meta charset="UTF-8">
-                <meta name="viewport" content="width=device-width, initial-scale=1.0">
-                <style>
-                    body { 
-                        font-family: Arial, sans-serif; 
-                        line-height: 1.6; 
-                        color: #333; 
-                        margin: 0; 
-                        padding: 0;
-                    }
-                    .container { 
-                        max-width: 600px; 
-                        margin: 0 auto; 
-                        padding: 20px; 
-                    }
-                    .header { 
-                        background: #2563eb; 
-                        color: white; 
-                        padding: 20px; 
-                        text-align: center; 
-                    }
-                    .content { 
-                        padding: 20px; 
-                        background: #f9f9f9; 
-                    }
-                    .footer { 
-                        padding: 20px; 
-                        text-align: center; 
-                        font-size: 12px; 
-                        color: #666; 
-                        background: #f1f1f1;
-                    }
-                    .highlight {
-                        background: #e3f2fd;
-                        padding: 15px;
-                        border-left: 4px solid #2196f3;
-                        margin: 15px 0;
-                    }
-                </style>
-            </head>
-            <body>
-                <div class="container">
-                    <div class="header">
-                        <h1>Starlink Token WiFi</h1>
-                    </div>
-                    <div class="content">
-                        ${content}
-                    </div>
-                    <div class="footer">
-                        <p>This is an automated notification from Starlink Token WiFi</p>
-                        <p>© 2024 Starlink Token WiFi. All rights reserved.</p>
-                    </div>
-                </div>
-            </body>
-            </html>
-        `,
+class EmailNotifier {
+    constructor() {
+        // Backend API URL - Your live Render backend
+        this.apiUrl = 'https://starlink-wifi-backend-v862.onrender.com/api';
         
-        admin: `
-            <!DOCTYPE html>
-            <html>
-            <head>
-                <meta charset="UTF-8">
-                <meta name="viewport" content="width=device-width, initial-scale=1.0">
-                <style>
-                    body { 
-                        font-family: Arial, sans-serif; 
-                        line-height: 1.6; 
-                        color: #333; 
-                        margin: 0; 
-                        padding: 0;
-                    }
-                    .container { 
-                        max-width: 600px; 
-                        margin: 0 auto; 
-                        padding: 20px; 
-                    }
-                    .header { 
-                        background: #dc2626; 
-                        color: white; 
-                        padding: 20px; 
-                        text-align: center; 
-                    }
-                    .content { 
-                        padding: 20px; 
-                        background: #fef2f2; 
-                        border-left: 4px solid #dc2626; 
-                    }
-                    .footer { 
-                        padding: 20px; 
-                        text-align: center; 
-                        font-size: 12px; 
-                        color: #666; 
-                        background: #f1f1f1;
-                    }
-                    .highlight { 
-                        background: #fee2e2; 
-                        padding: 15px; 
-                        border-radius: 5px; 
-                        margin: 15px 0; 
-                    }
-                    .button {
-                        display: inline-block;
-                        padding: 12px 24px;
-                        background: #2563eb;
-                        color: white;
-                        text-decoration: none;
-                        border-radius: 5px;
-                        font-weight: bold;
-                    }
-                </style>
-            </head>
-            <body>
-                <div class="container">
-                    <div class="header">
-                        <h1>ADMIN NOTIFICATION</h1>
-                        <p>Starlink Token WiFi - Admin Panel Alert</p>
-                    </div>
-                    <div class="content">
-                        ${content}
-                        <div class="highlight">
-                            <p><strong>Action Required:</strong> Please log in to the admin panel to review this notification.</p>
-                            <p><a href="${process.env.FRONTEND_URL || 'https://your-domain.com'}/admin.html" class="button">
-                                Go to Admin Panel
-                            </a></p>
-                        </div>
-                    </div>
-                    <div class="footer">
-                        <p>This is an automated administrative notification</p>
-                        <p>© 2024 Starlink Token WiFi. All rights reserved.</p>
-                    </div>
-                </div>
-            </body>
-            </html>
-        `
-    };
+        // Load email configuration from config
+        const emailConfig = config.getEmailConfig();
+        
+        this.senderEmail = emailConfig.sender || 'support@starlinktokenwifi.com';
+        this.adminEmail = emailConfig.admin || 'billnjehia18@gmail.com';
+        
+        console.log('📧 Email Notifier initialized with backend:', this.apiUrl);
+    }
     
-    return templates[templateType] || templates.default;
-}
-
-// API Routes
-
-// Health check endpoint
-app.get('/api/health', async (req, res) => {
-    try {
-        // Test database connection
-        const { data: messages, error: msgError } = await supabase
-            .from('messages')
-            .select('count', { count: 'exact', head: true });
+    // Send email notification via backend API
+    async sendNotification(recipientEmail, subject, message, template = 'default') {
+        try {
+            console.log(`📨 Sending email to: ${recipientEmail}`, { subject, template });
             
-        const { data: gallery, error: galError } = await supabase
-            .from('gallery')
-            .select('count', { count: 'exact', head: true });
-            
-        const dbStatus = (!msgError && !galError) ? 'connected' : 'disconnected';
-        
-        res.json({ 
-            success: true, 
-            message: 'Starlink WiFi Backend is running',
-            database: dbStatus,
-            timestamp: new Date().toISOString()
-        });
-    } catch (error) {
-        res.status(500).json({
-            success: false,
-            message: 'Health check failed',
-            error: error.message
-        });
-    }
-});
-
-// Image upload endpoint - saves to Supabase AND sends notification
-app.post('/api/upload-image', async (req, res) => {
-    try {
-        const { imageData } = req.body;
-        
-        if (!imageData) {
-            return res.status(400).json({ 
-                success: false, 
-                message: 'Image data is required' 
+            const response = await fetch(`${this.apiUrl}/send-notification`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    to: recipientEmail,
+                    subject: subject,
+                    content: message,
+                    template: template
+                })
             });
-        }
 
-        // Save to Supabase
-        const { data, error } = await supabase
-            .from('gallery')
-            .insert([{
-                title: imageData.title || '',
-                description: imageData.description || '',
-                url: imageData.url,
-                filename: imageData.filename,
-                category: imageData.category || 'general',
-                size: imageData.size,
-                type: imageData.type,
-                visible: true,
-                uploaded_by: 'admin'
-            }])
-            .select()
-            .single();
+            const result = await response.json();
 
-        if (error) throw error;
-        
-        // Send email notification
-        const emailContent = `
-            <h2>New Image Added to Gallery</h2>
-            <div class="highlight">
-                <p><strong>Title:</strong> ${imageData.title || 'Untitled'}</p>
-                <p><strong>Description:</strong> ${imageData.description || 'No description'}</p>
-                <p><strong>Category:</strong> ${imageData.category || 'general'}</p>
-                <p><strong>File:</strong> ${imageData.filename || 'Unknown'}</p>
-                <p><strong>Size:</strong> ${(imageData.size ? (imageData.size / 1024 / 1024).toFixed(2) : '0')} MB</p>
-            </div>
-            <p><small>Uploaded at: ${new Date().toLocaleString()}</small></p>
-        `;
+            if (!response.ok) {
+                throw new Error(result.message || `HTTP error! status: ${response.status}`);
+            }
 
-        const mailOptions = {
-            from: process.env.SENDER_EMAIL || '"Starlink WiFi" <support@starlinkwifi.com>',
-            to: process.env.ADMIN_EMAIL || 'admin@starlinkwifi.com',
-            subject: 'New Image Uploaded to Gallery - Admin Notification',
-            html: generateEmailTemplate(emailContent, 'admin')
-        };
-
-        const info = await transporter.sendMail(mailOptions);
-        
-        console.log('Image saved to Supabase and notification sent:', info.messageId);
-        
-        res.json({ 
-            success: true, 
-            message: 'Image uploaded successfully',
-            data: data,
-            messageId: info.messageId
-        });
-        
-    } catch (error) {
-        console.error('Error uploading image:', error);
-        res.status(500).json({ 
-            success: false, 
-            message: 'Failed to upload image',
-            error: error.message 
-        });
-    }
-});
-
-// Get all gallery images
-app.get('/api/gallery', async (req, res) => {
-    try {
-        const { category, limit } = req.query;
-        let query = supabase
-            .from('gallery')
-            .select('*')
-            .eq('visible', true)
-            .order('created_at', { ascending: false });
-        
-        if (category && category !== 'all') {
-            query = query.eq('category', category);
-        }
-        
-        if (limit) {
-            query = query.limit(parseInt(limit));
-        }
-        
-        const { data, error } = await query;
-        
-        if (error) throw error;
+            if (result.success) {
+                console.log('✅ Email sent successfully:', result.messageId);
+                
+                // Show success message to user (optional)
+                this.showNotification('Email sent successfully', 'success');
+                
+                return { 
+                    success: true, 
+                    messageId: result.messageId,
+                    data: result
+                };
+            } else {
+                throw new Error(result.message || 'Failed to send email');
+            }
             
-        res.json({
-            success: true,
-            data: data,
-            count: data.length
-        });
-        
-    } catch (error) {
-        console.error('Error fetching gallery:', error);
-        res.status(500).json({
-            success: false,
-            message: 'Failed to fetch gallery',
-            error: error.message
-        });
-    }
-});
-
-// Delete gallery image
-app.delete('/api/gallery/:id', async (req, res) => {
-    try {
-        const { id } = req.params;
-        const { error } = await supabase
-            .from('gallery')
-            .delete()
-            .eq('id', id);
-        
-        if (error) throw error;
-        
-        res.json({
-            success: true,
-            message: 'Image deleted successfully'
-        });
-        
-    } catch (error) {
-        console.error('Error deleting image:', error);
-        res.status(500).json({
-            success: false,
-            message: 'Failed to delete image',
-            error: error.message
-        });
-    }
-});
-
-// Contact form submission endpoint - saves to Supabase AND sends notification
-app.post('/api/contact', async (req, res) => {
-    try {
-        const { name, email, phone, service, message } = req.body;
-        
-        // Validate required fields
-        if (!name || !email || !message) {
-            return res.status(400).json({
-                success: false,
-                message: 'Name, email, and message are required'
-            });
-        }
-        
-        // Save to Supabase
-        const { data, error } = await supabase
-            .from('messages')
-            .insert([{
-                name,
-                email,
-                phone: phone || '',
-                service: service || '',
-                message,
-                read: false,
-                status: 'received',
-                ip_address: req.ip,
-                user_agent: req.get('User-Agent')
-            }])
-            .select()
-            .single();
-
-        if (error) throw error;
-        
-        // Send email notification to admin
-        const emailContent = `
-            <h2>New Message from Website Contact Form</h2>
-            <div class="highlight">
-                <p><strong>Name:</strong> ${name}</p>
-                <p><strong>Email:</strong> ${email}</p>
-                <p><strong>Phone:</strong> ${phone || 'Not provided'}</p>
-                <p><strong>Service:</strong> ${service || 'Not specified'}</p>
-            </div>
-            <h3>Message:</h3>
-            <blockquote style="border-left: 4px solid #ddd; padding-left: 15px; margin: 15px 0;">
-                ${message}
-            </blockquote>
-            <p><small>Received at: ${new Date().toLocaleString()}</small></p>
-        `;
-
-        const mailOptions = {
-            from: process.env.SENDER_EMAIL || '"Starlink WiFi" <support@starlinkwifi.com>',
-            to: process.env.ADMIN_EMAIL || 'admin@starlinkwifi.com',
-            subject: 'New Contact Message Received - Admin Notification',
-            html: generateEmailTemplate(emailContent, 'admin')
-        };
-
-        const info = await transporter.sendMail(mailOptions);
-        
-        console.log('Message saved to Supabase and notification sent:', info.messageId);
-        
-        res.json({ 
-            success: true, 
-            message: 'Message sent successfully! We\'ll contact you soon.',
-            data: data,
-            messageId: info.messageId
-        });
-        
-    } catch (error) {
-        console.error('Error processing contact form:', error);
-        res.status(500).json({ 
-            success: false, 
-            message: 'Failed to send message',
-            error: error.message 
-        });
-    }
-});
-
-// Get all messages (admin only)
-app.get('/api/messages', async (req, res) => {
-    try {
-        const { read, status, limit } = req.query;
-        let query = supabase
-            .from('messages')
-            .select('*')
-            .order('created_at', { ascending: false });
-        
-        if (read !== undefined) {
-            query = query.eq('read', read === 'true');
-        }
-        
-        if (status) {
-            query = query.eq('status', status);
-        }
-        
-        if (limit) {
-            query = query.limit(parseInt(limit));
-        }
-        
-        const { data, error } = await query;
-        
-        if (error) throw error;
-        
-        // Get unread count
-        const { count: unreadCount, error: countError } = await supabase
-            .from('messages')
-            .select('count', { count: 'exact', head: true })
-            .eq('read', false);
+        } catch (error) {
+            console.error('❌ Error sending email:', error);
             
-        res.json({
-            success: true,
-            data: data,
-            count: data.length,
-            unreadCount: countError ? 0 : unreadCount
-        });
-        
-    } catch (error) {
-        console.error('Error fetching messages:', error);
-        res.status(500).json({
-            success: false,
-            message: 'Failed to fetch messages',
-            error: error.message
-        });
-    }
-});
-
-// Update message status
-app.patch('/api/messages/:id', async (req, res) => {
-    try {
-        const { id } = req.params;
-        const { read, status } = req.body;
-        
-        const updateData = {};
-        if (read !== undefined) {
-            updateData.read = read;
-            updateData.read_at = read ? new Date().toISOString() : null;
+            // Show error message to user
+            this.showNotification('Failed to send email: ' + error.message, 'error');
+            
+            // Re-throw the error so calling code knows it failed
+            throw new Error(`Email delivery failed: ${error.message}`);
         }
-        if (status) {
-            updateData.status = status;
-            if (status === 'responded') {
-                updateData.responded_at = new Date().toISOString();
+    }
+    
+    // Show notification to user (you can customize this)
+    showNotification(message, type = 'info') {
+        // Check if we're in a browser environment
+        if (typeof window !== 'undefined') {
+            // You can use your existing notification system here
+            // For example, if you have a toast/alert system:
+            if (window.showToast) {
+                window.showToast(message, type);
+            } else {
+                // Fallback to console only, no UI
+                console.log(`[${type.toUpperCase()}] ${message}`);
             }
         }
-        
-        const { data, error } = await supabase
-            .from('messages')
-            .update(updateData)
-            .eq('id', id)
-            .select()
-            .single();
-        
-        if (error) throw error;
-        
-        if (!data) {
-            return res.status(404).json({
-                success: false,
-                message: 'Message not found'
-            });
-        }
-        
-        res.json({
-            success: true,
-            message: 'Message updated successfully',
-            data: data
-        });
-        
-    } catch (error) {
-        console.error('Error updating message:', error);
-        res.status(500).json({
-            success: false,
-            message: 'Failed to update message',
-            error: error.message
-        });
     }
-});
-
-// Delete message
-app.delete('/api/messages/:id', async (req, res) => {
-    try {
-        const { id } = req.params;
-        const { error } = await supabase
-            .from('messages')
-            .delete()
-            .eq('id', id);
-        
-        if (error) throw error;
-        
-        res.json({
-            success: true,
-            message: 'Message deleted successfully'
-        });
-        
-    } catch (error) {
-        console.error('Error deleting message:', error);
-        res.status(500).json({
-            success: false,
-            message: 'Failed to delete message',
-            error: error.message
-        });
+    
+    // Send admin notification via backend
+    async sendAdminNotification(message, type = 'info') {
+        const subject = `Starlink WiFi Admin Notification - ${type.toUpperCase()}`;
+        return await this.sendNotification(this.adminEmail, subject, message, 'admin');
     }
-});
-
-// Get all bundles
-app.get('/api/bundles', async (req, res) => {
-    try {
-        const { data, error } = await supabase
-            .from('bundles')
-            .select('*')
-            .eq('visible', true)
-            .order('price', { ascending: true });
+    
+    // Send new message notification to admin
+    async sendNewMessageNotification(messageData) {
+        try {
+            const subject = '📬 New Contact Message Received';
+            const message = `
+                <h2>New Message from Website Contact Form</h2>
+                <div style="background: #f3f4f6; padding: 15px; border-radius: 8px; margin: 15px 0;">
+                    <p><strong>👤 Name:</strong> ${this.escapeHtml(messageData.name)}</p>
+                    <p><strong>📧 Email:</strong> ${this.escapeHtml(messageData.email)}</p>
+                    <p><strong>📞 Phone:</strong> ${this.escapeHtml(messageData.phone || 'Not provided')}</p>
+                    <p><strong>🛠️ Service:</strong> ${this.escapeHtml(messageData.service || 'Not specified')}</p>
+                </div>
+                <h3>💬 Message:</h3>
+                <blockquote style="border-left: 4px solid #2563eb; padding-left: 15px; margin: 15px 0; color: #4b5563;">
+                    ${this.escapeHtml(messageData.message)}
+                </blockquote>
+                <p><small>📅 Received at: ${new Date().toLocaleString()}</small></p>
+                <p><small>🌐 From: ${this.escapeHtml(messageData.page || 'Contact Form')}</small></p>
+            `;
             
-        if (error) throw error;
+            return await this.sendAdminNotification(message, 'new_message');
+        } catch (error) {
+            console.error('Failed to send new message notification:', error);
+            throw error; // Re-throw to let caller handle
+        }
+    }
+    
+    // Send image upload notification
+    async sendImageUploadNotification(imageData) {
+        try {
+            const subject = '🖼️ New Image Uploaded to Gallery';
+            const message = `
+                <h2>New Image Added to Gallery</h2>
+                <div style="background: #f3f4f6; padding: 15px; border-radius: 8px; margin: 15px 0;">
+                    <p><strong>🖼️ Title:</strong> ${this.escapeHtml(imageData.title || 'Untitled')}</p>
+                    <p><strong>📝 Description:</strong> ${this.escapeHtml(imageData.description || 'No description')}</p>
+                    <p><strong>🏷️ Category:</strong> ${this.escapeHtml(imageData.category || 'general')}</p>
+                    <p><strong>📁 File:</strong> ${this.escapeHtml(imageData.filename || 'Unknown')}</p>
+                    <p><strong>📊 Size:</strong> ${imageData.size ? (imageData.size / 1024 / 1024).toFixed(2) : '0'} MB</p>
+                    ${imageData.url ? `<p><strong>🔗 URL:</strong> <a href="${this.escapeHtml(imageData.url)}">View Image</a></p>` : ''}
+                </div>
+                <p><small>📅 Uploaded at: ${new Date().toLocaleString()}</small></p>
+                <p><small>👤 Uploaded by: Admin</small></p>
+            `;
             
-        res.json({
-            success: true,
-            data: data,
-            count: data.length
-        });
-        
-    } catch (error) {
-        console.error('Error fetching bundles:', error);
-        res.status(500).json({
-            success: false,
-            message: 'Failed to fetch bundles',
-            error: error.message
-        });
-    }
-});
-
-// Update bundle
-app.put('/api/bundles/:bundleId', async (req, res) => {
-    try {
-        const { bundleId } = req.params;
-        const bundleData = req.body;
-        
-        // Validate bundle ID
-        if (!['daily', 'weekly', 'monthly', 'business'].includes(bundleId)) {
-            return res.status(400).json({
-                success: false,
-                message: 'Invalid bundle ID'
-            });
+            return await this.sendAdminNotification(message, 'image_upload');
+        } catch (error) {
+            console.error('Failed to send image upload notification:', error);
+            throw error;
         }
-        
-        // Update bundle
-        const { data, error } = await supabase
-            .from('bundles')
-            .update({ 
-                ...bundleData,
-                last_updated: new Date().toISOString(),
-                updated_by: 'admin'
-            })
-            .eq('bundle_id', bundleId)
-            .select()
-            .single();
-
-        if (error) throw error;
-        
-        // Send email notification
-        const featuresList = data.features 
-            ? data.features.map(feature => `<li>${feature}</li>`).join('')
-            : '';
-
-        const emailContent = `
-            <h2>Bundle Information Updated</h2>
-            <div class="highlight">
-                <p><strong>Bundle ID:</strong> ${bundleId}</p>
-                <p><strong>Name:</strong> ${data.name}</p>
-                <p><strong>Price:</strong> KSh ${data.price}</p>
-            </div>
-            <h3>Features:</h3>
-            <ul>${featuresList}</ul>
-            <p><small>Updated at: ${new Date().toLocaleString()}</small></p>
-        `;
-
-        const mailOptions = {
-            from: process.env.SENDER_EMAIL || '"Starlink WiFi" <support@starlinkwifi.com>',
-            to: process.env.ADMIN_EMAIL || 'admin@starlinkwifi.com',
-            subject: 'Bundle Updated - Admin Notification',
-            html: generateEmailTemplate(emailContent, 'admin')
-        };
-
-        const info = await transporter.sendMail(mailOptions);
-        
-        console.log('Bundle updated and notification sent:', info.messageId);
-        
-        res.json({ 
-            success: true, 
-            message: 'Bundle updated successfully',
-            data: data,
-            messageId: info.messageId
-        });
-        
-    } catch (error) {
-        console.error('Error updating bundle:', error);
-        res.status(500).json({ 
-            success: false, 
-            message: 'Failed to update bundle',
-            error: error.message 
-        });
     }
-});
-
-// Get bundle by ID
-app.get('/api/bundles/:bundleId', async (req, res) => {
-    try {
-        const { bundleId } = req.params;
-        const { data, error } = await supabase
-            .from('bundles')
-            .select('*')
-            .eq('bundle_id', bundleId)
-            .eq('visible', true)
-            .single();
-        
-        if (error) throw error;
-        
-        if (!data) {
-            return res.status(404).json({
-                success: false,
-                message: 'Bundle not found'
-            });
+    
+    // Send bundle update notification
+    async sendBundleUpdateNotification(bundleData, bundleId) {
+        try {
+            const subject = '📦 Bundle Updated';
+            
+            // Format features as list
+            const featuresList = bundleData.features && Array.isArray(bundleData.features) 
+                ? bundleData.features.map(f => `<li>${this.escapeHtml(f)}</li>`).join('')
+                : '<li>No features listed</li>';
+            
+            const message = `
+                <h2>Bundle Information Updated</h2>
+                <div style="background: #f3f4f6; padding: 15px; border-radius: 8px; margin: 15px 0;">
+                    <p><strong>📦 Bundle ID:</strong> ${this.escapeHtml(bundleId)}</p>
+                    <p><strong>🏷️ Name:</strong> ${this.escapeHtml(bundleData.name)}</p>
+                    <p><strong>💰 Price:</strong> KSh ${this.escapeHtml(bundleData.price)}</p>
+                </div>
+                <h3>✨ Features:</h3>
+                <ul>
+                    ${featuresList}
+                </ul>
+                <p><small>📅 Updated at: ${new Date().toLocaleString()}</small></p>
+                <p><small>👤 Updated by: Admin</small></p>
+            `;
+            
+            return await this.sendAdminNotification(message, 'bundle_update');
+        } catch (error) {
+            console.error('Failed to send bundle update notification:', error);
+            throw error;
         }
-        
-        res.json({
-            success: true,
-            data: data
-        });
-        
-    } catch (error) {
-        console.error('Error fetching bundle:', error);
-        res.status(500).json({
-            success: false,
-            message: 'Failed to fetch bundle',
-            error: error.message
-        });
     }
-});
-
-// Generic notification endpoint
-app.post('/api/send-notification', async (req, res) => {
-    try {
-        const { to, subject, content, template = 'default' } = req.body;
-        
-        if (!to || !subject || !content) {
-            return res.status(400).json({ 
-                success: false, 
-                message: 'Recipient, subject, and content are required' 
-            });
+    
+    // Test backend connection
+    async testConnection() {
+        try {
+            const response = await fetch(`${this.apiUrl}/health`);
+            const data = await response.json();
+            
+            if (response.ok && data.success) {
+                console.log('✅ Backend connection successful:', data);
+                return { success: true, data };
+            } else {
+                throw new Error('Backend health check failed');
+            }
+        } catch (error) {
+            console.error('❌ Backend connection failed:', error);
+            return { success: false, error: error.message };
         }
+    }
+    
+    // Helper: Escape HTML to prevent XSS
+    escapeHtml(unsafe) {
+        if (!unsafe) return unsafe;
+        return unsafe
+            .replace(/&/g, "&amp;")
+            .replace(/</g, "&lt;")
+            .replace(/>/g, "&gt;")
+            .replace(/"/g, "&quot;")
+            .replace(/'/g, "&#039;");
+    }
+}
 
-        const mailOptions = {
-            from: process.env.SENDER_EMAIL || '"Starlink WiFi" <support@starlinkwifi.com>',
-            to: to,
-            subject: subject,
-            html: generateEmailTemplate(content, template)
-        };
+// Initialize email notifier
+const emailNotifier = new EmailNotifier();
 
-        const info = await transporter.sendMail(mailOptions);
-        
-        console.log('Generic notification sent:', info.messageId);
-        
-        res.json({ 
-            success: true, 
-            message: 'Notification sent successfully',
-            messageId: info.messageId
-        });
-        
-    } catch (error) {
-        console.error('Error sending generic notification:', error);
-        res.status(500).json({ 
-            success: false, 
-            message: 'Failed to send notification',
-            error: error.message 
-        });
+// Test connection on initialization (optional)
+emailNotifier.testConnection().then(result => {
+    if (result.success) {
+        console.log('🚀 Email system ready with live backend');
+    } else {
+        console.warn('⚠️ Email system initialized but backend unreachable');
     }
 });
 
-// Error handling middleware
-app.use((err, req, res, next) => {
-    console.error('Unhandled error:', err);
-    res.status(500).json({
-        success: false,
-        message: 'Internal server error',
-        error: process.env.NODE_ENV === 'development' ? err.message : undefined
-    });
-});
-
-// Root health endpoint (for uptime monitors)
-app.get('/', (req, res) => {
-    res.status(200).json({
-        success: true,
-        message: 'Starlink WiFi Backend is online',
-        uptime: process.uptime(),
-        timestamp: new Date().toISOString()
-    });
-});
-
-// 404 handler
-app.use('*', (req, res) => {
-    res.status(404).json({
-        success: false,
-        message: 'Endpoint not found'
-    });
-});
-
-// Start server
-app.listen(PORT, () => {
-    console.log(`🚀 Starlink WiFi Backend Server running on port ${PORT}`);
-    console.log(`📡 Environment: ${process.env.NODE_ENV || 'development'}`);
-    console.log(`📧 Email notifications: ${process.env.EMAIL_USER ? 'ENABLED' : 'DISABLED'}`);
-});
-
-module.exports = app;
+// Export for use in other modules
+export { emailNotifier };
