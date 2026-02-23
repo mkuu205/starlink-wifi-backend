@@ -274,7 +274,7 @@ app.post('/api/upload-image', async (req, res) => {
         `;
 
         const mailOptions = {
-            from: process.env.SENDER_EMAIL || '"Starlink WiFi" <notifications@starlinkwifi.com>',
+            from: process.env.SENDER_EMAIL || '"Starlink WiFi" <support@starlinkwifi.com>',
             to: process.env.ADMIN_EMAIL || 'admin@starlinkwifi.com',
             subject: 'New Image Uploaded to Gallery - Admin Notification',
             html: generateEmailTemplate(emailContent, 'admin')
