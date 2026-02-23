@@ -414,7 +414,7 @@ app.post('/api/contact', async (req, res) => {
         `;
 
         const mailOptions = {
-            from: process.env.SENDER_EMAIL || '"Starlink WiFi" <notifications@starlinkwifi.com>',
+            from: process.env.SENDER_EMAIL || '"Starlink WiFi" <support@starlinkwifi.com>',
             to: process.env.ADMIN_EMAIL || 'admin@starlinkwifi.com',
             subject: 'New Contact Message Received - Admin Notification',
             html: generateEmailTemplate(emailContent, 'admin')
@@ -638,7 +638,7 @@ app.put('/api/bundles/:bundleId', async (req, res) => {
         `;
 
         const mailOptions = {
-            from: process.env.SENDER_EMAIL || '"Starlink WiFi" <notifications@starlinkwifi.com>',
+            from: process.env.SENDER_EMAIL || '"Starlink WiFi" <support@starlinkwifi.com>',
             to: process.env.ADMIN_EMAIL || 'admin@starlinkwifi.com',
             subject: 'Bundle Updated - Admin Notification',
             html: generateEmailTemplate(emailContent, 'admin')
@@ -713,7 +713,7 @@ app.post('/api/send-notification', async (req, res) => {
         }
 
         const mailOptions = {
-            from: process.env.SENDER_EMAIL || '"Starlink WiFi" <notifications@starlinkwifi.com>',
+            from: process.env.SENDER_EMAIL || '"Starlink WiFi" <support@starlinkwifi.com>',
             to: to,
             subject: subject,
             html: generateEmailTemplate(content, template)
