@@ -16,7 +16,7 @@ const PORT = process.env.PORT || 3000;
 
 // Middleware
 app.use(cors({
-    origin: ['http://localhost:5500', 'http://127.0.0.1:5500', 'https://starlinktokenwifi.com'], // Add your domain
+    origin: true, // Allow all origins in development
     credentials: true
 }));
 app.use(express.json({ limit: '50mb' }));
@@ -257,9 +257,7 @@ app.post('/api/upload-image', async (req, res) => {
                 category: imageData.category || 'general',
                 size: imageData.size,
                 type: imageData.type,
-                visible: true,
-                uploaded_by: 'admin',
-                created_at: new Date().toISOString()
+                visible: true
             }])
             .select()
             .single();
@@ -315,7 +313,7 @@ app.get('/api/gallery', async (req, res) => {
             .from('gallery')
             .select('*')
             .eq('visible', true)
-            .order('created_at', { ascending: false });
+            .order('id', { ascending: false });
         
         if (category && category !== 'all') {
             query = query.eq('category', category);
@@ -394,10 +392,7 @@ app.post('/api/contact', async (req, res) => {
                 service: service || '',
                 message,
                 read: false,
-                status: 'received',
-                ip_address: req.ip || req.headers['x-forwarded-for'] || 'unknown',
-                user_agent: req.get('User-Agent'),
-                created_at: new Date().toISOString()
+                status: 'received'
             }])
             .select()
             .single();
