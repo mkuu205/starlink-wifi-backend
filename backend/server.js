@@ -80,7 +80,7 @@ app.post("/api/contact", async (req, res) => {
 
     await resend.emails.send({
 
-      from: "Starlink Token WiFi <onboarding@resend.dev>",
+      from: "Starlink Token WiFi <support@starlinktokenwifi.com>",
       to: process.env.ADMIN_EMAIL || "support@starlinktokenwifi.com",
 
       subject: "New Contact Form Message",
