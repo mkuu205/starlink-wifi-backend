@@ -105,7 +105,9 @@ app.post('/api/send-push-notification', async (req, res) => {
           .select('fcm_token, device_id, platform');
 
         if (!subError && subscriptions && subscriptions.length > 0) {
-          const tokens = subscriptions.map(s => s.fcm_token).filter(Boolean);
+          const tokens = subscriptions
+  .map(s => s.fcm_token)
+  .filter(token => token && token.length > 10);
           
           if (tokens.length > 0) {
             // Prepare FCM message
