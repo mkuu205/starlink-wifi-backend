@@ -79,8 +79,6 @@ app.post('/api/send-push-notification', async (req, res) => {
       .from('notifications')
       .insert([{
         title: title,
-        message: message,
-        content: message,
         priority: priority,
         sent: true,
         created_at: new Date().toISOString(),
