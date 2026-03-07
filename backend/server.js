@@ -52,21 +52,38 @@ app.get('/api/health', (req, res) => {
 
 // Contact Form Submission
 app.post("/api/contact", async (req, res) => {
+
   try {
+
     const { name, email, phone, service, message } = req.body;
+
+    if (!name || !email || !message) {
+      return res.status(400).json({
+        success: false,
+        message: "Missing required fields"
+      });
+    }
 
     console.log("📨 New contact form from:", name, email);
 
     await resend.emails.send({
-      from: "Starlink Token WiFi <support@starlinktokenwifi.com>",
+
+      from: process.env.SENDER_EMAIL || "Starlink Token WiFi <onboarding@resend.dev>",
+
       to: process.env.ADMIN_EMAIL || "support@starlinktokenwifi.com",
+
+      reply_to: email,
+
       subject: "New Contact Form Message",
+
       html: `
         <h2>New Website Message</h2>
+
         <p><b>Name:</b> ${name}</p>
         <p><b>Email:</b> ${email}</p>
         <p><b>Phone:</b> ${phone || "Not provided"}</p>
         <p><b>Service:</b> ${service || "Not specified"}</p>
+
         <p><b>Message:</b></p>
         <p>${message}</p>
       `
@@ -78,12 +95,16 @@ app.post("/api/contact", async (req, res) => {
     });
 
   } catch (error) {
+
     console.error("❌ Email error:", error);
+
     res.status(500).json({
       success: false,
       message: "Failed to send email"
     });
+
   }
+
 });
 
 // Send Push Notification
