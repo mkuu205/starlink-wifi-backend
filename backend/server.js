@@ -41,58 +41,32 @@ if (process.env.FIREBASE_PROJECT_ID && !admin.apps.length) {
   }
 }
 
-// Email Transporter
-const transporter = nodemailer.createTransport({
-  service: "gmail",
-  auth: {
-    user: process.env.EMAIL_USER,
-    pass: process.env.EMAIL_PASS
-  }
-});
-
-// Verify Email Connection
-transporter.verify((error, success) => {
-  if (error) {
-    console.error('❌ Email configuration error:', error);
-  } else {
-    console.log('✅ Email server ready');
-  }
-});
-
 // Health Check
 app.get('/api/health', (req, res) => {
   res.json({ 
     success: true, 
     status: 'ok', 
-    timestamp: new Date().toISOString(),
-    email: process.env.EMAIL_USER || 'not configured'
+    timestamp: new Date().toISOString()
   });
 });
 
 // Contact Form Submission
 app.post("/api/contact", async (req, res) => {
-
   try {
-
     const { name, email, phone, service, message } = req.body;
 
     console.log("📨 New contact form from:", name, email);
 
     await resend.emails.send({
-
       from: "Starlink Token WiFi <support@starlinktokenwifi.com>",
       to: process.env.ADMIN_EMAIL || "support@starlinktokenwifi.com",
-
       subject: "New Contact Form Message",
-
       html: `
         <h2>New Website Message</h2>
-
         <p><b>Name:</b> ${name}</p>
         <p><b>Email:</b> ${email}</p>
         <p><b>Phone:</b> ${phone || "Not provided"}</p>
         <p><b>Service:</b> ${service || "Not specified"}</p>
-
         <p><b>Message:</b></p>
         <p>${message}</p>
       `
@@ -104,16 +78,12 @@ app.post("/api/contact", async (req, res) => {
     });
 
   } catch (error) {
-
     console.error("❌ Email error:", error);
-
     res.status(500).json({
       success: false,
       message: "Failed to send email"
     });
-
   }
-
 });
 
 // Send Push Notification
@@ -172,35 +142,16 @@ app.post('/api/send-push-notification', async (req, res) => {
   }
 });
 
-// Send Notification Email
-app.post('/api/send-notification', async (req, res) => {
-  try {
-    const { to, subject, content } = req.body;
-    
-    await transporter.sendMail({
-      from: `"Starlink Token WiFi" <${process.env.EMAIL_USER}>`,
-      to,
-      subject,
-      html: content
-    });
-    
-    res.json({ success: true, message: 'Email sent successfully' });
-  } catch (error) {
-    console.error('❌ Send notification error:', error);
-    res.status(500).json({ success: false, message: error.message });
-  }
-});
-
-// Notify New Message
+// Notify New Message (using Resend)
 app.post('/api/notify-new-message', async (req, res) => {
   try {
     const { messageData, adminEmail } = req.body;
     const recipient = adminEmail || process.env.ADMIN_EMAIL || 'billnjehia18@gmail.com';
     
-    await transporter.sendMail({
-      from: `"Starlink Token WiFi" <${process.env.EMAIL_USER}>`,
+    await resend.emails.send({
+      from: "Starlink Token WiFi <support@starlinktokenwifi.com>",
       to: recipient,
-      replyTo: messageData.email,
+      reply_to: messageData.email,
       subject: '📬 New Contact Message Received',
       html: `
         <h2>New Message from Website</h2>
@@ -220,14 +171,14 @@ app.post('/api/notify-new-message', async (req, res) => {
   }
 });
 
-// Notify Image Upload
+// Notify Image Upload (using Resend)
 app.post('/api/notify-image-upload', async (req, res) => {
   try {
     const { imageData, adminEmail } = req.body;
     const recipient = adminEmail || process.env.ADMIN_EMAIL || 'billnjehia18@gmail.com';
     
-    await transporter.sendMail({
-      from: `"Starlink Token WiFi" <${process.env.EMAIL_USER}>`,
+    await resend.emails.send({
+      from: "Starlink Token WiFi <support@starlinktokenwifi.com>",
       to: recipient,
       subject: '🖼️ New Image Uploaded to Gallery',
       html: `
@@ -245,14 +196,14 @@ app.post('/api/notify-image-upload', async (req, res) => {
   }
 });
 
-// Notify Bundle Update
+// Notify Bundle Update (using Resend)
 app.post('/api/notify-bundle-update', async (req, res) => {
   try {
     const { bundleData, bundleId, adminEmail } = req.body;
     const recipient = adminEmail || process.env.ADMIN_EMAIL || 'billnjehia18@gmail.com';
     
-    await transporter.sendMail({
-      from: `"Starlink Token WiFi" <${process.env.EMAIL_USER}>`,
+    await resend.emails.send({
+      from: "Starlink Token WiFi <support@starlinktokenwifi.com>",
       to: recipient,
       subject: '📦 Bundle Updated',
       html: `
@@ -273,6 +224,5 @@ app.post('/api/notify-bundle-update', async (req, res) => {
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
   console.log(`🚀 Server running on port ${PORT}`);
-  console.log(`📧 Email: ${process.env.EMAIL_USER || 'NOT CONFIGURED'}`);
   console.log(`📧 Admin: ${process.env.ADMIN_EMAIL || 'billnjehia18@gmail.com'}`);
 });
