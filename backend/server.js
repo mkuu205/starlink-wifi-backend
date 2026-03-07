@@ -2,7 +2,9 @@
 // Email: support@starlinktokenwifi.com (forwards to billnjehia18@gmail.com)
 
 const express = require('express');
-const nodemailer = require('nodemailer');
+const { Resend } = require("resend");
+
+const resend = new Resend(process.env.RESEND_API_KEY);
 const { createClient } = require('@supabase/supabase-js');
 const admin = require('firebase-admin');
 
@@ -68,36 +70,37 @@ app.get('/api/health', (req, res) => {
 });
 
 // Contact Form Submission
-app.post('/api/contact', async (req, res) => {
+app.post("/api/contact", async (req, res) => {
+
   try {
 
     const { name, email, phone, service, message } = req.body;
 
     console.log("📨 New contact form from:", name, email);
 
-    await transporter.sendMail({
-      from: `"Starlink Token WiFi" <${process.env.EMAIL_USER}>`,
-      to: process.env.ADMIN_EMAIL || "billnjehia18@gmail.com",
-      replyTo: email,
+    await resend.emails.send({
+
+      from: "Starlink Token WiFi <onboarding@resend.dev>",
+      to: process.env.ADMIN_EMAIL || "support@starlinktokenwifi.com",
+
       subject: "New Contact Form Message",
+
       html: `
         <h2>New Website Message</h2>
 
-        <p><strong>Name:</strong> ${name}</p>
-        <p><strong>Email:</strong> ${email}</p>
-        <p><strong>Phone:</strong> ${phone || "Not provided"}</p>
-        <p><strong>Service:</strong> ${service || "Not specified"}</p>
+        <p><b>Name:</b> ${name}</p>
+        <p><b>Email:</b> ${email}</p>
+        <p><b>Phone:</b> ${phone || "Not provided"}</p>
+        <p><b>Service:</b> ${service || "Not specified"}</p>
 
-        <h3>Message</h3>
+        <p><b>Message:</b></p>
         <p>${message}</p>
       `
     });
 
-    console.log("✅ Email sent");
-
     res.json({
       success: true,
-      message: "Message sent successfully"
+      message: "Email sent successfully"
     });
 
   } catch (error) {
@@ -106,10 +109,11 @@ app.post('/api/contact', async (req, res) => {
 
     res.status(500).json({
       success: false,
-      message: "Failed to send message"
+      message: "Failed to send email"
     });
 
   }
+
 });
 
 // Send Push Notification
