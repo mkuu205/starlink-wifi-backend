@@ -74,19 +74,111 @@ app.post("/api/contact", async (req, res) => {
 
       reply_to: email,
 
-      subject: "New Contact Form Message",
+      subject: "📩 New Contact Message - Starlink Token WiFi",
 
       html: `
-        <h2>New Website Message</h2>
+<div style="background:#f3f4f6;padding:40px 15px;font-family:Inter,Arial,sans-serif">
 
-        <p><b>Name:</b> ${name}</p>
-        <p><b>Email:</b> ${email}</p>
-        <p><b>Phone:</b> ${phone || "Not provided"}</p>
-        <p><b>Service:</b> ${service || "Not specified"}</p>
+  <div style="max-width:640px;margin:auto;background:#ffffff;border-radius:12px;
+  box-shadow:0 8px 30px rgba(0,0,0,0.08);overflow:hidden">
 
-        <p><b>Message:</b></p>
-        <p>${message}</p>
-      `
+    <!-- Header -->
+    <div style="padding:25px;text-align:center;border-bottom:1px solid #eee">
+
+      <img src="https://image2url.com/r2/default/images/1770561337315-920e5f5d-2254-4c03-8c95-c8eb7eac8442.jpg"
+      alt="Starlink Token WiFi Logo"
+      style="height:55px;margin-bottom:10px;border-radius:6px"/>
+
+      <h2 style="margin:0;font-size:20px;color:#111">
+        New Contact Message
+      </h2>
+
+      <p style="margin-top:6px;color:#6b7280;font-size:13px">
+        starlinktokenwifi.com
+      </p>
+
+    </div>
+
+    <!-- Body -->
+    <div style="padding:30px">
+
+      <div style="margin-bottom:22px">
+        <div style="font-size:13px;color:#6b7280">Name</div>
+        <div style="font-size:16px;font-weight:600">${name}</div>
+      </div>
+
+      <div style="margin-bottom:22px">
+        <div style="font-size:13px;color:#6b7280">Email</div>
+        <div style="font-size:16px;font-weight:600">${email}</div>
+      </div>
+
+      <div style="margin-bottom:22px">
+        <div style="font-size:13px;color:#6b7280">Phone</div>
+        <div style="font-size:16px;font-weight:600">${phone || "Not provided"}</div>
+      </div>
+
+      <div style="margin-bottom:22px">
+        <div style="font-size:13px;color:#6b7280">Service</div>
+        <div style="font-size:16px;font-weight:600">${service || "General Inquiry"}</div>
+      </div>
+
+      <!-- Message -->
+      <div style="margin-top:20px">
+
+        <div style="font-size:13px;color:#6b7280;margin-bottom:8px">
+          Message
+        </div>
+
+        <div style="
+          background:#f9fafb;
+          padding:18px;
+          border-radius:8px;
+          border:1px solid #e5e7eb;
+          line-height:1.6;
+          font-size:14px;
+        ">
+          ${message}
+        </div>
+
+      </div>
+
+      <!-- Reply Button -->
+      <div style="text-align:center;margin-top:30px">
+
+        <a href="mailto:${email}"
+        style="
+        display:inline-block;
+        background:#2563eb;
+        color:white;
+        padding:12px 22px;
+        border-radius:8px;
+        text-decoration:none;
+        font-weight:600;
+        font-size:14px">
+        Reply to Customer
+        </a>
+
+      </div>
+
+    </div>
+
+    <!-- Footer -->
+    <div style="padding:18px;text-align:center;background:#fafafa;border-top:1px solid #eee">
+
+      <div style="font-size:12px;color:#9ca3af">
+        Message received from <strong>starlinktokenwifi.com</strong>
+      </div>
+
+      <div style="font-size:12px;color:#9ca3af;margin-top:5px">
+        ${new Date().toLocaleString()}
+      </div>
+
+    </div>
+
+  </div>
+
+</div>
+`
     });
 
     res.json({
@@ -106,7 +198,6 @@ app.post("/api/contact", async (req, res) => {
   }
 
 });
-
 // Send Push Notification
 app.post('/api/send-push-notification', async (req, res) => {
   try {
